@@ -1,0 +1,14 @@
+[Unit]
+Description=AETHER independent target web service
+After=network.target
+
+[Service]
+User=aether
+Group=aether
+WorkingDirectory=/opt/aether/server
+ExecStart=/opt/aether/server/.venv/bin/python -m aether.target
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

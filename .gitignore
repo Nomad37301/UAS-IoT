@@ -1,0 +1,12 @@
+.build/
+.agents/
+**/node_modules/
+**/Secrets.h
+**/.env
+**/__pycache__/
+**/.pytest_cache/
+**/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+

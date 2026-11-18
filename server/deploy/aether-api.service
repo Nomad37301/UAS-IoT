@@ -1,0 +1,18 @@
+[Unit]
+Description=AETHER API, telemetry and recovery daemon
+After=network-online.target mosquitto.service aether-target.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aether
+Group=aether
+SupplementaryGroups=dialout gpio
+WorkingDirectory=/opt/aether/server
+EnvironmentFile=/opt/aether/server/.env
+ExecStart=/opt/aether/server/.venv/bin/uvicorn aether.app:create_app --factory --host 0.0.0.0 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AETHER · Monitoring Watchdog</title>
+<script>
+(()=>{try{const t=localStorage.getItem('aether-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t;}catch{}})();
+</script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f6f6f6;
+  --surface:#ffffff;
+  --surface-alt:#efefef;
+  --surface-hover:#e5e5e5;
+  --ink:#0a0a0a;
+  --ink-2:#3f3f3f;
+  --ink-muted:#5c5c5c;
+  --border:#d4d4d4;
+  --border-strong:#0a0a0a;
+  --solid-bg:#0a0a0a;
+  --solid-fg:#ffffff;
+  --radius:4px;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code","SF Mono","Cascadia Code",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --t-fast:140ms cubic-bezier(.2,0,0,1);
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#090909;
+  --surface:#121212;
+  --surface-alt:#1a1a1a;
+  --surface-hover:#242424;
+  --ink:#fafafa;
+  --ink-2:#cccccc;
+  --ink-muted:#a3a3a3;
+  --border:#2c2c2c;
+  --border-strong:#fafafa;
+  --solid-bg:#fafafa;
+  --solid-fg:#090909;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1200px;margin:0 auto;padding:24px 24px 40px}
+
+/* Typography utilities */
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.kicker{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)}
+h1,h2,h3,p{margin:0}
+
+/* Focus visibility */
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* Top Masthead */
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:18px;border-bottom:2px solid var(--border-strong);margin-bottom:24px}
+.brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.brand h1{font-family:var(--font-mono);font-size:22px;font-weight:700;letter-spacing:.16em;line-height:1}
+.brand-sub{font-size:12px;color:var(--ink-muted);letter-spacing:.01em}
+.topbar-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap}
+.pill.live{border-color:var(--border-strong)}
+.pill.alert{border-style:dashed;border-color:var(--border-strong);background:var(--surface-alt)}
+.dot{width:8px;height:8px;border-radius:999px;background:var(--ink);flex-shrink:0}
+.pill.alert .dot{background:transparent;border:1.5px solid var(--ink)}
+
+.icon-btn{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--ink);font-family:var(--font-mono);font-size:12px;font-weight:500;cursor:pointer;transition:background var(--t-fast),border-color var(--t-fast);min-height:32px}
+.icon-btn:hover{background:var(--surface-hover);border-color:var(--border-strong)}
+.icon-btn svg{width:15px;height:15px;flex-shrink:0}
+
+/* Hero Diagnosis Panel */
+.hero{background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius);padding:22px 24px;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;margin-bottom:20px}
+.hero.is-alert{border-width:2px}
+.hero-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.hero-state-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.hero h2{font-family:var(--font-mono);font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.hero p{color:var(--ink-2);font-size:14px;max-width:68ch}
+.hero-meta{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px;color:var(--ink-muted)}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--border-strong);white-space:nowrap}
+.hero-badge.ok{background:var(--solid-bg);color:var(--solid-fg)}
+.hero-badge.warn{background:repeating-linear-gradient(-45deg,var(--surface),var(--surface) 6px,var(--surface-alt) 6px,var(--surface-alt) 12px);color:var(--ink)}
+.hero-badge svg{width:16px;height:16px;flex-shrink:0}
+
+/* Telemetry 3-Node Grid */
+.nodes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;display:flex;flex-direction:column}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.card-title{display:flex;align-items:center;gap:8px}
+.card-title svg{width:16px;height:16px;color:var(--ink);flex-shrink:0}
+.card-title h3{font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.node-tag{font-family:var(--font-mono);font-size:11px;color:var(--ink-muted);border:1px solid var(--border);padding:2px 6px;border-radius:2px}
+.metric{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1;margin-bottom:14px}
+.kv-list{display:flex;flex-direction:column;gap:0;flex:1}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;border-top:1px solid var(--border);font-size:13px}
+.kv-label{color:var(--ink-muted)}
+.kv-val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:500;color:var(--ink);text-align:right}
+.card-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--ink-muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
+
+/* Section Headers */
+.section{margin-bottom:24px}
+.section-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.section-head h3{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.section-note{font-size:12px;color:var(--ink-muted)}
+
+/* 9 Protocols Matrix */
+.protocols{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.protocol{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:var(--radius);padding:11px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-family:var(--font-mono);font-size:12px;transition:border-color var(--t-fast)}
+.protocol.is-ok{border-color:var(--border);border-left:4px solid var(--border-strong)}
+.protocol.is-off{border-style:dashed;border-left-style:dashed;background:var(--bg)}
+.proto-name{font-weight:600;color:var(--ink);letter-spacing:.02em}
+.proto-state{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:2px;letter-spacing:.04em}
+.proto-state.good{background:var(--solid-bg);color:var(--solid-fg)}
+.proto-state.bad{border:1px solid var(--border);color:var(--ink-muted);background:var(--surface)}
+.proto-state svg{width:12px;height:12px;flex-shrink:0}
+
+/* Controls Console */
+.console{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.console-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.console-desc{font-size:13px;color:var(--ink-2);max-width:58ch;margin-top:4px}
+.key-wrap{display:flex;flex-direction:column;gap:5px;min-width:250px}
+.key-wrap label{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted)}
+input[type="password"]{font-family:var(--font-mono);font-size:13px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-alt);color:var(--ink);width:100%;transition:border-color var(--t-fast),background var(--t-fast)}
+input[type="password"]:focus{border-color:var(--border-strong);background:var(--surface)}
+input[type="password"]::placeholder{color:var(--ink-muted)}
+
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.ctrl-group-label{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:9px}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+.ctrl-btn{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-sans);font-size:13px;font-weight:500;padding:8px 13px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--ink);cursor:pointer;min-height:36px;transition:background var(--t-fast),border-color var(--t-fast)}
+.ctrl-btn:hover:not(:disabled){background:var(--surface-hover);border-color:var(--border-strong)}
+.ctrl-btn[aria-pressed="true"]{background:var(--solid-bg);color:var(--solid-fg);border-color:var(--border-strong);font-weight:600}
+.ctrl-btn.primary{border:1.5px solid var(--border-strong);font-weight:600}
+.ctrl-btn.primary:hover:not(:disabled){background:var(--surface-hover)}
+.ctrl-btn:disabled{opacity:.45;cursor:wait}
+.ctrl-btn svg{width:14px;height:14px;flex-shrink:0}
+
+.feedback{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+#notice:empty,#error:empty{display:none}
+#notice{padding:10px 12px;border:1px solid var(--border);border-left:3px solid var(--border-strong);background:var(--surface-alt);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+#error{padding:10px 12px;border:1px dashed var(--border-strong);background:var(--surface);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--ink)}
+
+/* Incident Table */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+thead th{background:var(--surface-alt);font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);text-align:left;padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--ink)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-alt)}
+.td-time{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-muted);white-space:nowrap}
+.td-src{font-family:var(--font-mono);font-size:12px;font-weight:600}
+.td-act{font-family:var(--font-mono);font-size:11px}
+.act-badge{display:inline-block;padding:2px 7px;border:1px solid var(--border);border-radius:2px;background:var(--surface-alt);font-weight:500;white-space:nowrap}
+.empty-row{text-align:center;color:var(--ink-muted);padding:24px 14px;font-family:var(--font-mono);font-size:12px}
+
+/* Footer */
+footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--ink-muted);line-height:1.7}
+
+/* Responsive */
+@media(max-width:920px){
+  .nodes,.protocols,.ctrl-grid{grid-template-columns:1fr 1fr}
+  .hero{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .wrap{padding:16px 14px 32px}
+  .topbar{flex-direction:column;align-items:flex-start}
+  .nodes,.protocols,.ctrl-grid{grid-template-columns:1fr}
+  .hero{padding:18px 16px}
+  .hero h2{font-size:24px}
+  .metric{font-size:28px}
+  .key-wrap{width:100%;min-width:0}
+  .table-wrap{border:none;background:transparent;overflow:visible}
+  table,thead,tbody,tr,td{display:block;width:100%;min-width:0}
+  thead{display:none}
+  tbody tr{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+  tbody tr:hover{background:var(--surface)}
+  tbody td{border-bottom:none;padding:4px 0;display:flex;justify-content:space-between;align-items:baseline;gap:12px;text-align:right}
+  tbody td::before{content:attr(data-label);font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);text-align:left;flex-shrink:0}
+  tbody td.empty-row{display:block;text-align:center;padding:18px 12px}
+  tbody td.empty-row::before{content:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div class="brand">
+      <h1>AETHER</h1>
+      <span class="brand-sub">Autonomous External Telemetry &amp; Hardware Emergency Recovery</span>
+    </div>
+    <div class="topbar-actions">
+      <span class="pill" id="connection" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="connection-text">Menghubungkan…</span></span>
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Ganti tema hitam putih" aria-pressed="false">
+        <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+        <span id="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" id="hero-panel" aria-labelledby="state">
+      <div>
+        <div class="hero-head">
+          <span class="kicker">DIAGNOSIS SISTEM</span>
+        </div>
+        <div class="hero-state-row">
+          <h2 id="state">Menunggu telemetri</h2>
+        </div>
+        <p id="diagnosis">Data perangkat akan tampil setelah tersambung.</p>
+        <div class="hero-meta">
+          <small id="mode">Mode demo: —</small>
+          <span id="last-sync">Sinkronisasi: —</span>
+        </div>
+      </div>
+      <div class="hero-badge warn" id="hero-badge">
+        <svg id="hero-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        <span id="hero-badge-text">MENUNGGU</span>
+      </div>
+    </section>
+
+    <section class="nodes" aria-label="Status Node Telemetri">
+      <article class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+            <h3>NODE A · RASPBERRY PI 5</h3>
+          </div>
+          <span class="node-tag">TARGET</span>
+        </div>
+        <div class="metric" id="cpu">— °C</div>
+        <div class="kv-list">
+          <div class="kv"><span class="kv-label">RAM / CPU load</span><span class="kv-val" id="load">—</span></div>
+          <div class="kv"><span class="kv-label">Target service</span><span class="kv-val" id="service">—</span></div>
+        </div>
+        <div class="card-foot">
+          <small id="uptime">Uptime —</small>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <h3>NODE B · WATCHDOG</h3>
+          </div>
+          <span class="node-tag">PROBE</span>
+        </div>
+        <div class="metric" id="voltage">— V</div>
+        <div class="kv-list">
+          <div class="kv"><span class="kv-label">IR objek / ambient</span><span class="kv-val" id="ir">—</span></div>
+          <div class="kv"><span class="kv-label">HTTP / Modbus</span><span class="kv-val" id="probes">—</span></div>
+        </div>
+        <div class="card-foot">
+          <small id="ageB">Belum ada data</small>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg>
+            <h3>NODE C · ADMIN CONSOLE</h3>
+          </div>
+          <span class="node-tag">RF LINK</span>
+        </div>
+        <div class="metric" id="rf">—</div>
+        <div class="kv-list">
+          <div class="kv"><span class="kv-label">HTTP eksternal</span><span class="kv-val" id="ext">—</span></div>
+          <div class="kv"><span class="kv-label">RF sequence</span><span class="kv-val" id="seq">—</span></div>
+        </div>
+        <div class="card-foot">
+          <small id="ageC">Belum ada data</small>
+        </div>
+      </article>
+    </section>
+
+    <section class="section" aria-labelledby="proto-heading">
+      <div class="section-head">
+        <h3 id="proto-heading">Observasi 9 protokol</h3>
+        <span class="section-note">Garis solid = observasi terbaru tersedia · Garis putus-putus = tidak tersedia. CoAP/LwM2M memakai subset URI proyek.</span>
+      </div>
+      <div class="protocols" id="protocols"></div>
+    </section>
+
+    <section class="section console" aria-labelledby="ctrl-heading">
+      <div class="console-top">
+        <div>
+          <h3 class="kicker" id="ctrl-heading" style="font-size:13px;color:var(--ink)">Kontrol demo &amp; recovery</h3>
+          <p class="console-desc">Fault injection adalah simulasi. Perintah aktuator yang masuk antrean broker tetap memerlukan Node B aktif.</p>
+        </div>
+        <div class="key-wrap">
+          <label for="key">Bearer API Key (opsional)</label>
+          <input id="key" type="password" autocomplete="off" placeholder="API key, jika dikonfigurasi" aria-label="API key">
+        </div>
+      </div>
+
+      <div class="ctrl-grid">
+        <div>
+          <div class="ctrl-group-label">Simulasi Fault Injection</div>
+          <div class="controls">
+            <button type="button" class="ctrl-btn" data-mode="NORMAL" aria-pressed="false">Normal</button>
+            <button type="button" class="ctrl-btn" data-mode="SERVICE_CRASH" aria-pressed="false">Service crash</button>
+            <button type="button" class="ctrl-btn" data-mode="EXT_BLOCK" aria-pressed="false">Blokir probe C</button>
+            <button type="button" class="ctrl-btn" data-mode="OVERHEAT_SIM" aria-pressed="false">Simulasi overheat</button>
+          </div>
+        </div>
+        <div>
+          <div class="ctrl-group-label">Aktuator &amp; Probe Manual</div>
+          <div class="controls">
+            <button type="button" class="ctrl-btn primary" data-target="RELAY_RECOVERY">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              Pulsa relay recovery
+            </button>
+            <button type="button" class="ctrl-btn" data-target="MUTE_ALARM">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+              Mute alarm
+            </button>
+            <button type="button" class="ctrl-btn" data-target="COAP_POLL">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Baca resource CoAP
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="feedback">
+        <div id="notice" role="status"></div>
+        <div id="error" role="alert"></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="inc-heading">
+      <div class="section-head">
+        <h3 id="inc-heading">Insiden terbaru</h3>
+        <span class="section-note mono" id="incident-count">0 entri</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Waktu</th>
+              <th>Sumber / Diagnosis</th>
+              <th>Bukti</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="incidents"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>UART 9600 8N1 · MQTT 1883 · HTTP/REST 8000 · CoAP 5683 · Radio channel 76, 250 kbps. GPIO 17 Pi meminta recovery melalui daemon; bukan pin reset kernel.</footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const fmt=(n,unit='',digits=1)=>typeof n==='number'&&Number.isFinite(n)?n.toFixed(digits)+unit:'—';
+
+const ICON_CHECK='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3.5 8.5 6.5 11.5 12.5 4.5"/></svg>';
+const ICON_MINUS='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4" y1="8" x2="12" y2="8"/></svg>';
+const ICON_OK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+const ICON_ALERT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+const ICON_SUN='<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>';
+const ICON_MOON='<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+
+function syncThemeUI(){
+  const dark=document.documentElement.dataset.theme==='dark';
+  $('theme-icon').innerHTML=dark?ICON_SUN:ICON_MOON;
+  $('theme-label').textContent=dark?'Light':'Dark';
+  $('theme-toggle').setAttribute('aria-pressed',String(dark));
+}
+syncThemeUI();
+$('theme-toggle').addEventListener('click',()=>{
+  const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('aether-theme',next);}catch{}
+  syncThemeUI();
+});
+
+async function api(path,body){
+  const headers={};
+  if(body){
+    headers['Content-Type']='application/json';
+    if($('key').value)headers.Authorization='Bearer '+$('key').value;
+  }
+  const response=await fetch(path,{method:body?'POST':'GET',headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(4000)});
+  const data=await response.json();
+  if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data));
+  return data;
+}
+
+function age(node,s){
+  return s.age_s[node]===undefined?'Belum ada data':'Data '+s.age_s[node]+' detik lalu'+(s.age_s[node]>=10?' · STALE':'');
+}
+
+function formatNotice(label,data){
+  if(data&&typeof data==='object'){
+    if('mode'in data)return 'OK · '+label+' -> mode '+data.mode+(data.demo_message_queued?' (broker queued)':' (lokal)');
+    if('queued_to_broker'in data)return 'OK · '+label+(data.simulated?' (simulasi)':'')+' -> queued: '+data.queued_to_broker+', executed: '+Boolean(data.executed);
+  }
+  return 'OK · '+label+' -> '+JSON.stringify(data);
+}
+
+async function refresh(){
+  try{
+    const [s,incidents]=await Promise.all([api('/api/v1/status'),api('/api/v1/incidents?limit=25')]);
+    $('error').textContent='';
+    $('connection-text').textContent=s.nodeA.simulated?'SIMULASI · API terhubung':'API terhubung';
+    $('connection').className='pill live';
+
+    const healthy=s.state==='HEALTHY';
+    $('state').textContent=s.state;
+    $('diagnosis').textContent=s.diagnosis;
+    $('mode').textContent='Mode demo: '+s.fault_mode;
+    $('last-sync').textContent='Sinkronisasi: '+new Date().toLocaleTimeString('id-ID',{hour12:false});
+    $('hero-panel').className=healthy?'hero':'hero is-alert';
+    $('hero-badge').className=healthy?'hero-badge ok':'hero-badge warn';
+    $('hero-badge').innerHTML=(healthy?ICON_OK:ICON_ALERT)+'<span>'+(healthy?'NOMINAL':'PERHATIAN')+'</span>';
+
+    for(const btn of document.querySelectorAll('button[data-mode]')){
+      btn.setAttribute('aria-pressed',String(btn.dataset.mode===s.fault_mode));
+    }
+
+    const a=s.nodeA,b=s.nodes.nodeB||{},c=s.nodes.nodeC||{};
+    $('cpu').textContent=fmt(a.cpu_temp_c,' °C');
+    $('load').textContent=fmt(a.ram_pct,'%',0)+' / '+fmt(a.load_pct,'%',0);
+    $('service').textContent=a.service_running?'Running':'Down';
+    $('uptime').textContent='Uptime '+fmt(a.uptime_s,' s',0);
+
+    $('voltage').textContent=s.age_s.nodeB<10?fmt(b.voltage_v,' V',2):'— V';
+    $('ir').textContent=fmt(b.ir_obj_c,'°')+' / '+fmt(b.ir_amb_c,'°');
+    $('probes').textContent=(b.http_code??'—')+' / '+(b.modbus_ok?'OK':'—');
+    $('ageB').textContent=age('nodeB',s);
+
+    $('rf').textContent=s.age_s.nodeC<10&&c.rf_rx_alive?'RF ONLINE':'RF UNAVAILABLE';
+    $('ext').textContent=c.http_ext_code??'—';
+    $('seq').textContent=c.last_rf_seq??'—';
+    $('ageC').textContent=age('nodeC',s);
+
+    $('protocols').replaceChildren();
+    for(const [name,ok] of Object.entries(s.protocols)){
+      const row=document.createElement('div');
+      row.className='protocol '+(ok?'is-ok':'is-off');
+      const title=document.createElement('span');
+      title.className='proto-name';
+      title.textContent=name;
+      const status=document.createElement('span');
+      status.className='proto-state '+(ok?'good':'bad');
+      status.innerHTML=(ok?ICON_CHECK:ICON_MINUS)+'<span>'+(ok?'OBSERVED':'UNAVAILABLE')+'</span>';
+      row.append(title,status);
+      $('protocols').append(row);
+    }
+
+    $('incident-count').textContent=incidents.length+' entri';
+    $('incidents').replaceChildren();
+    if(incidents.length===0){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan=4;
+      td.className='empty-row';
+      td.textContent='Belum ada insiden tercatat.';
+      tr.append(td);
+      $('incidents').append(tr);
+    }else{
+      for(const item of incidents){
+        const tr=document.createElement('tr');
+        const tdTime=document.createElement('td');
+        tdTime.className='td-time';
+        tdTime.dataset.label='Waktu';
+        tdTime.textContent=new Date(item.timestamp*1000).toLocaleString('id-ID',{hour12:false});
+
+        const tdSrc=document.createElement('td');
+        tdSrc.className='td-src';
+        tdSrc.dataset.label='Sumber / Diagnosis';
+        tdSrc.textContent=item.source+' / '+item.diagnosis;
+
+        const tdEv=document.createElement('td');
+        tdEv.dataset.label='Bukti';
+        tdEv.textContent=item.evidence||'—';
+
+        const tdAct=document.createElement('td');
+        tdAct.className='td-act';
+        tdAct.dataset.label='Aksi';
+        const badge=document.createElement('span');
+        badge.className='act-badge';
+        badge.textContent=item.action;
+        tdAct.append(badge);
+
+        tr.append(tdTime,tdSrc,tdEv,tdAct);
+        $('incidents').append(tr);
+      }
+    }
+  }catch(error){
+    $('connection-text').textContent='API terputus';
+    $('connection').className='pill alert';
+    $('state').textContent='DATA_STALE';
+    $('diagnosis').textContent='API tidak dapat diperbarui. Periksa konsol radio Node C; angka sebelumnya sudah kedaluwarsa.';
+    $('hero-panel').className='hero is-alert';
+    $('hero-badge').className='hero-badge warn';
+    $('hero-badge').innerHTML=ICON_ALERT+'<span>TERPUTUS</span>';
+    $('ageB').textContent='STALE - API tidak tersedia';
+    $('ageC').textContent='STALE - API tidak tersedia';
+    $('error').textContent='Koneksi API gagal: '+error.message;
+  }
+}
+
+for(const button of document.querySelectorAll('button[data-mode],button[data-target]')){
+  button.addEventListener('click',async()=>{
+    button.disabled=true;
+    $('error').textContent='';
+    try{
+      const data=button.dataset.mode
+        ?await api('/api/v1/fault/inject',{mode:button.dataset.mode})
+        :await api('/api/v1/actuator/cmd',{target:button.dataset.target});
+      $('notice').textContent=formatNotice(button.textContent.trim(),data);
+      await refresh();
+    }catch(error){
+      $('error').textContent=error.message;
+    }finally{
+      button.disabled=false;
+    }
+  });
+}
+
+async function loop(){await refresh();setTimeout(loop,2000);}
+loop();
+</script>
+</body>
+</html>

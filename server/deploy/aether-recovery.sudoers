@@ -1,0 +1,2 @@
+# Validate with visudo -cf before installing with mode 0440.
+aether ALL=(root) NOPASSWD: /usr/bin/systemctl restart aether-target.service
