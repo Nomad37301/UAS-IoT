@@ -86,6 +86,12 @@ library AetherCore global jika memakai script ini.
 
 ## Menyiapkan Raspberry Pi 5
 
+Penyimpanan backend memakai **InfluxDB 3 Core untuk riwayat telemetri** dan
+**SQLite untuk insiden/recovery**. Setup database, token, retensi dan contoh
+endpoint tersedia di [panduan InfluxDB + SQLite](docs/INFLUXDB_SQLITE.md).
+Firmware ESP32 tetap mengirim MQTT/CoAP; token InfluxDB hanya di `server/.env`.
+Konfigurasi Docker tersedia di `server/deploy/compose.influx.yml`.
+
 1. Tempatkan repositori pada **`/opt/aether`**, lalu salin
    `server/.env.example` menjadi `server/.env` dan isi password/API key.
    IP Node B boleh dikosongkan agar ditemukan dari telemetri; reservation DHCP

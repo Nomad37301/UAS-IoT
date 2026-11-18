@@ -17,6 +17,7 @@ import serial
 
 from . import coap, rtu
 from .state import State, clean
+from .influx import InfluxTelemetry
 
 LOG = logging.getLogger('aether')
 
@@ -24,6 +25,9 @@ LOG = logging.getLogger('aether')
 class Runtime:
     def __init__(self, state: State):
         self.state = state
+        self.influx = InfluxTelemetry.from_env()
+        self.archive_lock = threading.Lock()
+        self.last_archive = {}
         self.stop = threading.Event()
         self.jobs = queue.Queue(maxsize=8)
         self.job_lock = threading.Lock()
@@ -60,11 +64,28 @@ class Runtime:
             data = json.loads(message.payload, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
             if not isinstance(data, dict): return
             if message.topic.endswith('/telemetry'):
-                self.state.ingest(message.topic.split('/')[1], data)
+                self.ingest_telemetry(message.topic.split('/')[1], data)
             elif message.topic == 'aether/alert/incident':
                 self.state.incident(str(data.get('source', 'unknown')), str(data.get('diagnosis', 'UNKNOWN')),
                                     str(data.get('evidence', '')), str(data.get('action', 'NONE')))
         except (ValueError, TypeError, UnicodeError): LOG.warning('Rejected MQTT payload on %s', message.topic)
+
+    def ingest_telemetry(self, node, data):
+        self.state.ingest(node, data)
+        # MQTT and CoAP can report the same sample. Archive at most once/second
+        # per node, allowing CoAP to continue archiving when MQTT is unavailable.
+        with self.archive_lock:
+            now = time.monotonic()
+            if now - self.last_archive.get(node, -1000) >= 1:
+                self.influx.enqueue(node, data)
+                self.last_archive[node] = now
+
+    def storage_status(self):
+        return {'incidents': {'engine': 'sqlite', 'retention_count': 1000},
+                'telemetry': self.influx.snapshot()}
+
+    def telemetry_history(self, node, minutes):
+        return self.influx.history(node, minutes)
 
     def publish(self, topic, data):
         if not self.client.is_connected(): return False
@@ -137,6 +158,7 @@ class Runtime:
                 self.stop.wait(3)
 
     def host_worker(self):
+        archived_at = -1000.0
         while not self.stop.is_set():
             host = {'cpu_temp_c': None, 'ram_pct': 0, 'load_pct': 0, 'uptime_s': int(time.monotonic()), 'service_running': False}
             try:
@@ -153,6 +175,13 @@ class Runtime:
                     host['service_running'] = result.status == 200
             except (OSError, ValueError): pass
             with self.state.lock: self.state.host = host
+            now = time.monotonic()
+            if now - archived_at >= 5:
+                self.influx.enqueue('nodeA', dict(cpu_temp_c=host['cpu_temp_c'],
+                    cpu_ram_pct=host['ram_pct'], cpu_load_pct=host['load_pct'],
+                    service_running=host['service_running'], uptime_ms=host['uptime_s'] * 1000,
+                    simulated=host.get('simulated', False)))
+                archived_at = now
             self.stop.wait(1)
 
     def node_b_host(self):
@@ -204,7 +233,7 @@ class Runtime:
                         code, payload = 69, b'{"mfg":"AETHER","model":"Pi5-Collector"}'
                     elif message.code == 2 and message.path == '/aether/nodeB':
                         data = json.loads(message.payload)
-                        self.state.ingest('nodeB', data)
+                        self.ingest_telemetry('nodeB', data)
                         with self.state.lock: self.state.coap_seen = now
                         code, payload = 68, b''
                     reply = coap.encode(coap.Message(2 if message.kind == 0 else 1, code, message.mid,
@@ -221,6 +250,8 @@ class Runtime:
             except (OSError, ValueError): pass
 
     def start(self):
+        thread = threading.Thread(target=self.influx.run, args=(self.stop,), daemon=True)
+        thread.start(); self.threads.append(thread)
         self.client.connect_async(os.getenv('AETHER_MQTT_HOST', '127.0.0.1'),
                                   int(os.getenv('AETHER_MQTT_PORT', '1883')), keepalive=20)
         self.client.loop_start()

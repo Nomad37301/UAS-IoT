@@ -249,6 +249,19 @@ LittleFS flash internal tanpa auto-format; log membutuhkan partisi spiffs minima
 Logika sensor, jaringan, UART, radio dan recovery identik dengan versi microSD.
 README menjelaskan pemilihan varian; script build memeriksa kedua varian B dan C.
 
+## InfluxDB + SQLite — 19 November 2026
+
+Telemetri Node A/B/C diarsipkan ke InfluxDB 3 Core melalui worker HTTP terpisah
+dan antrean terbatas, dengan retry dan statistik error/drop. SQLite tetap
+menyimpan insiden/recovery; tidak ada migrasi atau penghapusan data SQLite lama.
+MQTT dan CoAP memakai jalur ingest yang sama untuk membatasi duplikasi arsip;
+firmware ESP32 tidak berubah. Ditambahkan endpoint storage/history, konfigurasi
+backend dan Docker Compose, serta panduan setup retensi/token di
+`docs/INFLUXDB_SQLITE.md`.
+
+27 tes server lulus, termasuk kontrak HTTP InfluxDB melalui server localhost.
+Engine InfluxDB dan deployment Pi belum diuji; Docker daemon lokal tidak aktif.
+
 ## Catatan untuk integrasi berikutnya
 
 - Kontrak radio telah diperbaiki menjadi **32 byte dengan reserved[7]**, disetujui

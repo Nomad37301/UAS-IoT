@@ -59,6 +59,22 @@ def create_app(state=None, runtime=None, start_workers=True):
     @app.get('/api/v1/incidents')
     def incidents(limit: int = Query(100, ge=1, le=1000)): return state.incidents(limit)
 
+    @app.get('/api/v1/storage')
+    def storage():
+        if not hasattr(runtime, 'storage_status'):
+            return {'incidents': {'engine': 'sqlite', 'retention_count': 1000},
+                    'telemetry': {'engine': 'influxdb3', 'enabled': False, 'status': 'disabled'}}
+        return runtime.storage_status()
+
+    @app.get('/api/v1/telemetry/history', dependencies=[Depends(authorize)])
+    async def history(node: Literal['nodeA', 'nodeB', 'nodeC'] = 'nodeB',
+                      minutes: int = Query(60, ge=1, le=1440)):
+        if not hasattr(runtime, 'telemetry_history'):
+            raise HTTPException(503, 'Riwayat InfluxDB tidak tersedia pada mode ini')
+        try: return await asyncio.to_thread(runtime.telemetry_history, node, minutes)
+        except (OSError, ValueError, TimeoutError):
+            raise HTTPException(503, 'Riwayat belum tersedia; periksa konfigurasi, data, dan layanan InfluxDB')
+
     @app.post('/api/v1/fault/inject', dependencies=[Depends(authorize)])
     def inject(body: Fault):
         with state.lock: state.mode = body.mode
